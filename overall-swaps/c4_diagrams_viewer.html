@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Equity Swap - C4 Architecture Diagrams</title>
+    <style>
+        body { font-family: system-ui, -apple-system, sans-serif; margin: 2rem; max-width: 1400px; margin-left: auto; margin-right: auto; }
+        h1 { color: #333; border-bottom: 2px solid #0066cc; padding-bottom: 0.5rem; }
+        h2 { color: #0066cc; margin-top: 2.5rem; }
+        h3 { color: #555; margin-top: 1.5rem; }
+        .diagram-container { 
+            background: #f8f9fa; 
+            border: 1px solid #dee2e6; 
+            border-radius: 8px; 
+            padding: 1.5rem; 
+            margin: 1rem 0;
+            overflow-x: auto;
+        }
+        .mermaid { display: flex; justify-content: center; min-height: 200px; }
+        nav { margin: 1rem 0; padding: 1rem; background: #e9ecef; border-radius: 8px; }
+        nav a { margin-right: 1.5rem; text-decoration: none; color: #0066cc; font-weight: 500; }
+        nav a:hover { text-decoration: underline; }
+        .load-msg { color: #666; font-style: italic; }
+        .error-msg { color: #dc3545; }
+    </style>
+</head>
+<body>
+    <h1>Equity Swap Service - C4 Architecture Diagrams</h1>
+    <p>Derived from <code>architectural_blueprint.md</code></p>
+    
+    <nav>
+        <a href="#context">Level 1: Context</a>
+        <a href="#container">Level 2: Container</a>
+        <a href="#component">Level 3: Component</a>
+        <a href="#deployment">Level 4: Deployment</a>
+        <a href="#sequence">Sequence Diagrams</a>
+    </nav>
+
+    <h2 id="context">C4 Level 1: System Context Diagram</h2>
+    <p>Shows the system boundary and relationships with users and external systems.</p>
+    <div class="diagram-container">
+        <pre class="mermaid">
+flowchart TB
+    subgraph Users
+        trader["&#128100; Trader<br/><i>Front office - captures trades</i>"]
+        ops["&#128100; Operations User<br/><i>Positions, settlements, reporting</i>"]
+        admin["&#128100; System Admin<br/><i>Users & entitlements</i>"]
+    end
+
+    subgraph External["External Systems"]
+        ams["Allocation Mgmt System<br/><i>Submits allocated trades</i>"]
+        md_src["Market Data Sources<br/><i>Prices, rates, indices</i>"]
+        ref_src["Reference Data<br/><i>Securities, accounts, books</i>"]
+        idp["Identity Provider<br/><i>SSO/LDAP/SAML</i>"]
+        reg_rep["Regulatory Reporting<br/><i>EMIR, MiFID II</i>"]
+        fin_rep["Finance Reporting<br/><i>P&L, analytics</i>"]
+        risk_rep["Risk Reporting<br/><i>Market/credit risk</i>"]
+    end
+
+    swap_sys["Equity Swap Lifecycle Mgmt System<br/><i>2M+ trades/day, CDM compliant</i>"]
+
+    trader --> swap_sys
+    ops --> swap_sys
+    admin --> swap_sys
+    ams --> swap_sys
+    md_src --> swap_sys
+    ref_src --> swap_sys
+    idp --> swap_sys
+    swap_sys --> reg_rep
+    swap_sys --> fin_rep
+    swap_sys --> risk_rep
+        </pre>
+    </div>
+
+    <h2 id="container">C4 Level 2: Container Diagram</h2>
+    <p>Shows the high-level technical building blocks (containers) inside the system.</p>
+    <div class="diagram-container">
+        <pre class="mermaid">
+flowchart TB
+    subgraph External["External"]
+        ams[AMS]
+        idp[Identity Provider]
+    end
+
+    subgraph Ingestion["Ingestion Layer"]
+        gateway[API Gateway<br/>Kong/Envoy]
+        tc[Trade Capture Service<br/>Java/Spring Boot]
+    end
+
+    subgraph Orchestration
+        engine[Trade Lifecycle Engine<br/>CDM processor, Saga]
+    end
+
+    subgraph Core["Core Domain Services"]
+        pos[Position Service]
+        contract[Contract Service]
+        cf[Cashflow Service]
+        reset[Reset Service]
+        val[Valuation Service]
+        basket[Basket/Custom Index]
+    end
+
+    subgraph Supporting["Supporting"]
+        md_svc[Market Data]
+        ref_svc[Reference Data]
+        iam[IAM Service]
+    end
+
+    subgraph Data["Messaging & Storage"]
+        event_bus[Event Bus<br/>Kafka/Solace]
+        ods[Data Product Hub ODS]
+        tc_db[(Trade Capture DB)]
+        pos_db[(Position DB)]
+        redis[(Redis Cache)]
+    end
+
+    ams --> gateway
+    gateway --> tc
+    gateway --> iam
+    idp --> iam
+    tc --> engine
+    tc --> tc_db
+    engine --> pos
+    engine --> contract
+    engine --> reset
+    engine --> cf
+    engine --> event_bus
+    engine --> basket
+    event_bus --> ods
+    event_bus --> val
+    event_bus --> cf
+    val --> pos
+    val --> reset
+    val --> md_svc
+    cf --> contract
+    cf --> reset
+    cf --> pos
+    pos --> pos_db
+    pos --> redis
+    contract --> redis
+        </pre>
+    </div>
+
+    <h2 id="component">C4 Level 3: Component Diagrams</h2>
+
+    <h3>Trade Capture Service</h3>
+    <div class="diagram-container">
+        <pre class="mermaid">
+flowchart LR
+    subgraph TC["Trade Capture Service"]
+        api[Ingestion API]
+        rules[Business Rules]
+        transformer[CDM Transformer]
+        idempotency[Idempotency Handler]
+        client[Engine Client]
+    end
+
+    db[(Trade Capture DB)]
+
+    api --> rules --> transformer --> idempotency --> client
+    idempotency --> db
+        </pre>
+    </div>
+
+    <h3>Trade Lifecycle Engine</h3>
+    <div class="diagram-container">
+        <pre class="mermaid">
+flowchart TB
+    subgraph Engine["Lifecycle Engine"]
+        router[Instruction Router]
+        processor[Primitive Processor]
+        saga[Saga Coordinator]
+        conflict[Conflict Resolver]
+        publisher[Event Publisher]
+    end
+
+    subgraph Services
+        pos[Position Service]
+        contract[Contract Service]
+        reset[Reset Service]
+        cf[Cashflow Service]
+    end
+
+    kafka[Event Bus Kafka]
+
+    router --> processor
+    processor --> saga
+    processor --> conflict
+    processor --> publisher
+    saga --> pos
+    saga --> contract
+    saga --> reset
+    saga --> cf
+    publisher --> kafka
+        </pre>
+    </div>
+
+    <h3>Position Service</h3>
+    <div class="diagram-container">
+        <pre class="mermaid">
+flowchart TB
+    subgraph Pos["Position Service"]
+        pos_api[Position API]
+        lot_mgr[Trade Lot Manager]
+        agg[Aggregator]
+        uti[UTI Manager]
+        settlement[Settlement Tracker]
+        batch[Batch Query API]
+    end
+
+    pos_db[(Position DB)]
+    cache[(Redis Cache)]
+
+    pos_api --> lot_mgr
+    lot_mgr --> agg
+    lot_mgr --> uti
+    lot_mgr --> settlement
+    pos_api --> batch
+    batch --> cache
+    batch --> pos_db
+    lot_mgr --> pos_db
+        </pre>
+    </div>
+
+    <h3>Cashflow Service</h3>
+    <div class="diagram-container">
+        <pre class="mermaid">
+flowchart TB
+    subgraph CF["Cashflow Service"]
+        equity[Equity Leg Calculator]
+        interest[Interest Leg Calculator]
+        netting[Cashflow Netting]
+        resolver[Underlier Resolver]
+        strategy[Price Strategy]
+    end
+
+    pos[Position Service]
+    contract[Contract Service]
+    reset[Reset Service]
+
+    equity --> resolver --> strategy
+    equity --> interest --> netting
+    equity --> pos
+    interest --> pos
+    equity --> contract
+    interest --> contract
+    equity --> reset
+        </pre>
+    </div>
+
+    <h2 id="deployment">C4 Level 4: Deployment Diagram</h2>
+    <p>High-level deployment view.</p>
+    <div class="diagram-container">
+        <pre class="mermaid">
+flowchart TB
+    subgraph LB["Load Balancer"]
+        nginx[NGINX/HAProxy]
+    end
+
+    subgraph App["Application Cluster (K8s/ECS)"]
+        tc_node[Trade Capture]
+        engine_node[Lifecycle Engine]
+        pos_node[Position Service]
+        others[Contract, Cashflow, Reset, Valuation]
+    end
+
+    subgraph DB["Database Cluster"]
+        dynamo[(DynamoDB/Cassandra)]
+        pg[(PostgreSQL)]
+        tsdb[(TimescaleDB)]
+        redis[(Redis)]
+    end
+
+    subgraph Msg["Messaging"]
+        kafka[Kafka]
+    end
+
+    nginx --> App
+    tc_node --> dynamo
+    pos_node --> pg
+    pos_node --> tsdb
+    App --> redis
+    engine_node --> kafka
+        </pre>
+    </div>
+
+    <h2 id="sequence">Sequence Diagrams – Service Boundaries</h2>
+    <p>End-to-end flows showing synchronous and asynchronous interactions between services with clear boundaries.</p>
+
+    <h3>1. New Trade Capture Flow (Optimistic Pattern)</h3>
+    <p>AMS submits allocated trade → API Gateway (auth) → Trade Capture (translates to CDM) → Lifecycle Engine (orchestrates) → Domain services (persist).</p>
+    <div class="diagram-container">
+        <pre class="mermaid">
+sequenceDiagram
+    autonumber
+    box rgba(200,220,255) External
+        participant AMS as AMS
+    end
+    box rgba(255,220,200) Ingestion
+        participant GW as API Gateway
+        participant TC as Trade Capture
+    end
+    box rgba(200,255,220) Orchestration
+        participant Engine as Lifecycle Engine
+    end
+    box rgba(255,255,200) Supporting
+        participant IAM as IAM Service
+    end
+    box rgba(220,200,255) Core Domain
+        participant Pos as Position Service
+        participant Contract as Contract Service
+        participant Reset as Reset Service
+        participant CF as Cashflow Service
+    end
+    box rgba(200,200,200) Messaging
+        participant Kafka as Event Bus
+    end
+
+    AMS->>GW: POST /trades (allocated trade)
+    GW->>IAM: Validate JWT + Check trade:create
+    IAM-->>GW: Authorized
+    GW->>TC: Forward (user context)
+    TC->>TC: Apply Eco/Non-Eco rules
+    TC->>TC: Create ExecutionInstruction
+    TC->>Engine: CDM ExecutionInstruction (async batch)
+    TC-->>GW: 202 Accepted
+    GW-->>AMS: 202 Accepted
+    Engine->>Pos: Create trade lot
+    Pos-->>Engine: TradeLot created
+    Engine->>Contract: Link product reference
+    Contract-->>Engine: OK
+    Engine->>Reset: Record initial observation (if any)
+    Reset-->>Engine: OK
+    Engine->>CF: Create cashflow schedule
+    CF-->>Engine: OK
+    Engine->>Kafka: Publish BusinessEvent (NEW_TRADE)
+        </pre>
+    </div>
+
+    <h3>2. Conflict Resolution: ExecutionInstruction → QuantityChangeInstruction</h3>
+    <p>When Position Service detects existing position (optimistic conflict), Lifecycle Engine retries as QuantityChangeInstruction.</p>
+    <div class="diagram-container">
+        <pre class="mermaid">
+sequenceDiagram
+    autonumber
+    box rgba(255,220,200) Ingestion
+        participant TC as Trade Capture
+    end
+    box rgba(200,255,220) Orchestration
+        participant Engine as Lifecycle Engine
+    end
+    box rgba(220,200,255) Core Domain
+        participant Pos as Position Service
+    end
+
+    TC->>Engine: ExecutionInstruction (assume new)
+    Engine->>Pos: Create trade lot
+    Pos-->>Engine: Conflict: position exists
+    Engine->>Engine: Convert to QuantityChangeInstruction
+    Engine->>Pos: Update quantity (Increase)
+    Pos-->>Engine: Position updated
+    Engine->>Engine: Continue saga (Contract, Reset, CF)
+        </pre>
+    </div>
+
+    <h3>3. Reset + Transfer (Period-End Settlement)</h3>
+    <p>Lifecycle Engine processes composite instruction: record market observation (Reset) then settle cashflow (Transfer).</p>
+    <div class="diagram-container">
+        <pre class="mermaid">
+sequenceDiagram
+    autonumber
+    box rgba(200,255,220) Orchestration
+        participant Engine as Lifecycle Engine
+    end
+    box rgba(220,200,255) Core Domain
+        participant Reset as Reset Service
+        participant CF as Cashflow Service
+        participant Pos as Position Service
+    end
+    box rgba(200,200,200) Messaging
+        participant Kafka as Event Bus
+    end
+
+    Note over Engine: ResetInstruction + TransferInstruction
+    Engine->>Reset: Record reset observation (price/rate)
+    Reset-->>Engine: Reset recorded
+    Engine->>CF: Settle cashflow (net amount)
+    CF->>Pos: Read settled quantity, settlement date
+    Pos-->>CF: Quantity, settlement date
+    CF-->>Engine: Cashflow settled
+    Engine->>Kafka: Publish (RESET, SETTLEMENT events)
+        </pre>
+    </div>
+
+    <h3>4. Event-Driven Valuation Flow</h3>
+    <p>Valuation Service consumes lifecycle events and reads from Position, Reset, Market Data to compute MTM.</p>
+    <div class="diagram-container">
+        <pre class="mermaid">
+sequenceDiagram
+    autonumber
+    box rgba(200,200,200) Messaging
+        participant Kafka as Event Bus
+    end
+    box rgba(220,220,255) Analytics
+        participant Val as Valuation Service
+    end
+    box rgba(220,200,255) Core Domain
+        participant Pos as Position Service
+        participant Reset as Reset Service
+    end
+    box rgba(255,220,220) Supporting
+        participant MD as Market Data Service
+    end
+
+    Kafka->>Val: BusinessEvent (NEW_TRADE / POSITION_UPDATED)
+    Val->>Pos: Get trade lots, positions
+    Pos-->>Val: Lots, quantities, settlement dates
+    Val->>Reset: Get reset history
+    Reset-->>Val: Observations
+    Val->>MD: Get market prices
+    MD-->>Val: Prices, rates
+    Val->>Val: Calculate MTM / Cost basis
+    Val->>Val: Store valuation snapshot
+        </pre>
+    </div>
+
+    <h3>5. Cashflow Calculation (Read Across Services)</h3>
+    <p>Cashflow Service reads economic terms, resets, and positions to compute equity leg and interest leg.</p>
+    <div class="diagram-container">
+        <pre class="mermaid">
+sequenceDiagram
+    autonumber
+    box rgba(220,200,255) Core Domain
+        participant CF as Cashflow Service
+        participant Contract as Contract Service
+        participant Reset as Reset Service
+        participant Pos as Position Service
+    end
+
+    CF->>Contract: Get economic terms (payoff, financing)
+    Contract-->>CF: PerformancePayout, InterestRatePayout
+    CF->>Pos: Get settled quantity, settlement date
+    Pos-->>CF: Quantity, settlement date
+    CF->>Reset: Get reset observations (prices, rates)
+    Reset-->>CF: Observations
+    CF->>CF: Equity leg = price return x notional
+    CF->>CF: Interest leg = rate x year fraction
+    CF->>CF: Net cashflow = equity - interest
+        </pre>
+    </div>
+
+    <h3>6. Authorization Flow (API Gateway + IAM)</h3>
+    <p>All incoming requests pass through API Gateway with IAM authorization before reaching domain services.</p>
+    <div class="diagram-container">
+        <pre class="mermaid">
+sequenceDiagram
+    autonumber
+    participant Client as Client
+    box rgba(255,220,200) Edge
+        participant GW as API Gateway
+    end
+    box rgba(255,255,200) IAM
+        participant IAM as IAM Service
+    end
+    box rgba(220,200,255) Domain
+        participant Svc as Domain Service
+    end
+
+    Client->>GW: Request + JWT
+    GW->>IAM: Validate token
+    IAM-->>GW: User, roles
+    GW->>IAM: Check entitlement (e.g. position:read)
+    IAM-->>GW: Authorized / Denied
+    alt Authorized
+        GW->>Svc: Forward (user context)
+        Svc-->>GW: Response
+        GW-->>Client: 200 OK
+    else Denied
+        GW-->>Client: 403 Forbidden
+    end
+        </pre>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <script>
+        mermaid.initialize({ 
+            startOnLoad: true, 
+            theme: 'neutral',
+            securityLevel: 'loose',
+            flowchart: { useMaxWidth: true, htmlLabels: true }
+        });
+    </script>
+</body>
+</html>

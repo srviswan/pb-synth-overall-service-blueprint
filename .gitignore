@@ -1,0 +1,29 @@
+# macOS
+.DS_Store
+
+# Local history / editor artifacts
+.history/
+.cursor/
+.vscode/
+.idea/
+
+# Build outputs
+target/
+build/
+out/
+
+# Dependency folders
+node_modules/
+
+# Logs
+*.log
+
+# Env / secrets
+.env
+.env.*
+*.pem
+*.key
+
+# Python
+__pycache__/
+*.pyc
