@@ -57,6 +57,16 @@
         }
       }
     },
+    "CaptureTradeBatchAcceptedResponse": {
+      "type": "object",
+      "required": ["batchId", "status", "acceptedCount"],
+      "properties": {
+        "batchId": { "type": "string" },
+        "status": { "type": "string", "enum": ["ACCEPTED"] },
+        "acceptedCount": { "type": "integer" },
+        "rejectedCount": { "type": "integer" }
+      }
+    },
     "TradeIngestionStatusResponse": {
       "type": "object",
       "required": ["ingestionId", "status"],
@@ -68,6 +78,29 @@
         },
         "lastUpdatedAt": { "type": "string", "format": "date-time" },
         "failureReason": { "type": "string" }
+      }
+    },
+    "ErrorResponse": {
+      "type": "object",
+      "required": ["code", "message", "timestamp"],
+      "properties": {
+        "code": {
+          "type": "string",
+          "enum": [
+            "VALIDATION_ERROR",
+            "DUPLICATE_IDEMPOTENCY_KEY",
+            "LIFECYCLE_DISPATCH_ERROR",
+            "INGESTION_NOT_FOUND",
+            "INTERNAL_ERROR"
+          ]
+        },
+        "message": { "type": "string" },
+        "correlationId": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "details": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
       }
     }
   }
