@@ -1,7 +1,7 @@
 package com.pbsynth.tradecapture.api;
 
 import com.pbsynth.tradecapture.dto.*;
-import com.pbsynth.tradecapture.service.TradeCaptureService;
+import com.pbsynth.tradecapture.service.TradeIngestionService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -12,10 +12,10 @@ import org.springframework.web.bind.annotation.*;
 @Validated
 @RequestMapping("/trade-capture-service/v1")
 public class TradeCaptureController {
-    private final TradeCaptureService tradeCaptureService;
+    private final TradeIngestionService tradeIngestionService;
 
-    public TradeCaptureController(TradeCaptureService tradeCaptureService) {
-        this.tradeCaptureService = tradeCaptureService;
+    public TradeCaptureController(TradeIngestionService tradeIngestionService) {
+        this.tradeIngestionService = tradeIngestionService;
     }
 
     @PostMapping("/trades")
@@ -25,7 +25,7 @@ public class TradeCaptureController {
             @RequestHeader(value = "X-User-Context", required = false) String userContext,
             @Valid @RequestBody CaptureTradeRequest request
     ) {
-        CaptureTradeAcceptedResponse response = tradeCaptureService.captureSingle(
+        CaptureTradeAcceptedResponse response = tradeIngestionService.captureSingle(
                 request, idempotencyKey, correlationId, userContext
         );
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(response);
@@ -38,7 +38,7 @@ public class TradeCaptureController {
             @RequestHeader(value = "X-User-Context", required = false) String userContext,
             @Valid @RequestBody CaptureTradeBatchRequest request
     ) {
-        CaptureTradeBatchAcceptedResponse response = tradeCaptureService.captureBatch(
+        CaptureTradeBatchAcceptedResponse response = tradeIngestionService.captureBatch(
                 request, idempotencyKey, correlationId, userContext
         );
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(response);
@@ -46,6 +46,6 @@ public class TradeCaptureController {
 
     @GetMapping("/trades/{ingestionId}")
     public TradeIngestionStatusResponse getStatus(@PathVariable String ingestionId) {
-        return tradeCaptureService.getStatus(ingestionId);
+        return tradeIngestionService.getStatus(ingestionId);
     }
 }

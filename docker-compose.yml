@@ -1,0 +1,46 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: trade-capture-postgres
+    network_mode: host
+    environment:
+      POSTGRES_DB: tradecapture
+      POSTGRES_USER: tradecapture
+      POSTGRES_PASSWORD: tradecapture
+    volumes:
+      - tradecapture-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tradecapture -d tradecapture"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  lifecycle-mock:
+    image: ealen/echo-server:latest
+    container_name: lifecycle-mock
+    network_mode: host
+
+  trade-capture-service:
+    build:
+      context: ./trade-capture-service
+      dockerfile: Dockerfile
+    container_name: trade-capture-service
+    network_mode: host
+    depends_on:
+      postgres:
+        condition: service_healthy
+      lifecycle-mock:
+        condition: service_started
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/tradecapture
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+      SPRING_DATASOURCE_USERNAME: tradecapture
+      SPRING_DATASOURCE_PASSWORD: tradecapture
+      SPRING_SQL_INIT_MODE: always
+      SPRING_SQL_INIT_PLATFORM: postgres
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      TRADECAPTURE_DISPATCH_TARGET_LIFECYCLE_URL: http://localhost/lifecycle-engine/v1/instructions
+      TRADECAPTURE_DISPATCH_WORKER_ENABLED: "true"
+
+volumes:
+  tradecapture-postgres-data:
