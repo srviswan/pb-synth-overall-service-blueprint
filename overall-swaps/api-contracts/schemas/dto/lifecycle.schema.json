@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lifecycle.schema.json",
+  "title": "Lifecycle DTO Schemas",
+  "type": "object",
+  "definitions": {
+    "PrimitiveInstructionEnvelope": {
+      "type": "object",
+      "required": ["instructionType", "tradeKey", "payload", "metadata"],
+      "properties": {
+        "instructionType": {
+          "type": "string",
+          "enum": [
+            "ExecutionInstruction",
+            "QuantityChangeInstruction",
+            "ResetInstruction",
+            "TransferInstruction",
+            "TermsChangeInstruction",
+            "PartyChangeInstruction",
+            "ContractFormationInstruction"
+          ]
+        },
+        "tradeKey": { "type": "string" },
+        "payload": { "type": "object", "additionalProperties": true },
+        "metadata": { "$ref": "common.schema.json#/definitions/Metadata" },
+        "userContext": { "$ref": "common.schema.json#/definitions/UserContext" }
+      }
+    },
+    "InstructionAcceptedResponse": {
+      "type": "object",
+      "required": ["instructionId", "status"],
+      "properties": {
+        "instructionId": { "type": "string" },
+        "status": { "type": "string", "enum": ["ACCEPTED"] },
+        "queuedAt": { "type": "string", "format": "date-time" }
+      }
+    }
+  }
+}

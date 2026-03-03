@@ -1,0 +1,213 @@
+openapi: 3.0.3
+info:
+  title: Position Service API
+  version: 1.0.0
+  description: Trade lots, position aggregation, and settled quantity contracts.
+servers:
+  - url: /position-service
+paths:
+  /v1/trade-lots:
+    post:
+      summary: Create trade lot
+      operationId: createTradeLot
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/CorrelationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTradeLotRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TradeLotResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /v1/trade-lots/{lotId}/quantity:
+    patch:
+      summary: Update lot quantity
+      operationId: updateLotQuantity
+      parameters:
+        - $ref: "#/components/parameters/LotId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/CorrelationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateQuantityRequest"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TradeLotResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/positions:batchGet:
+    post:
+      summary: Batch query positions by keys
+      operationId: batchGetPositions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BatchPositionQueryRequest"
+      responses:
+        "200":
+          description: Batch result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BatchPositionQueryResponse"
+
+  /v1/trade-lots/{lotId}/settled-quantity:
+    get:
+      summary: Get settled quantity for accrual calculations
+      operationId: getSettledQuantity
+      parameters:
+        - $ref: "#/components/parameters/LotId"
+        - in: query
+          name: asOfDate
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Settled quantity details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SettledQuantityResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+components:
+  parameters:
+    IdempotencyKey:
+      in: header
+      name: Idempotency-Key
+      required: true
+      schema: { type: string }
+    CorrelationId:
+      in: header
+      name: X-Correlation-Id
+      required: true
+      schema: { type: string }
+    LotId:
+      in: path
+      name: lotId
+      required: true
+      schema: { type: string }
+
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    NotFound:
+      description: Not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+  schemas:
+    CreateTradeLotRequest:
+      type: object
+      required: [tradeId, accountId, bookId, securityId, direction, quantity, tradeDate, settlementDate]
+      properties:
+        tradeId: { type: string }
+        accountId: { type: string }
+        bookId: { type: string }
+        securityId: { type: string }
+        direction:
+          type: string
+          enum: [LONG, SHORT]
+        quantity: { type: number }
+        settledQuantity: { type: number }
+        price: { type: number }
+        tradeDate: { type: string, format: date }
+        settlementDate: { type: string, format: date }
+        uti: { type: string }
+        productId: { type: string }
+
+    UpdateQuantityRequest:
+      type: object
+      required: [changeType, quantityDelta]
+      properties:
+        changeType:
+          type: string
+          enum: [INCREASE, DECREASE, TERMINATE]
+        quantityDelta:
+          type: number
+        effectiveDate:
+          type: string
+          format: date
+
+    TradeLotResponse:
+      type: object
+      required: [lotId, tradeId, positionKey, quantity, settlementDate]
+      properties:
+        lotId: { type: string }
+        tradeId: { type: string }
+        positionKey: { type: string }
+        quantity: { type: number }
+        settledQuantity: { type: number }
+        settlementDate: { type: string, format: date }
+        version: { type: integer }
+
+    BatchPositionQueryRequest:
+      type: object
+      required: [keys]
+      properties:
+        keys:
+          type: array
+          items: { type: string }
+
+    BatchPositionQueryResponse:
+      type: object
+      properties:
+        positions:
+          type: array
+          items:
+            type: object
+            properties:
+              positionKey: { type: string }
+              netQuantity: { type: number }
+              direction: { type: string }
+              uti: { type: string }
+
+    SettledQuantityResponse:
+      type: object
+      required: [lotId, settledQuantity, settlementDate]
+      properties:
+        lotId: { type: string }
+        settledQuantity: { type: number }
+        settlementDate: { type: string, format: date }
+        asOfDate: { type: string, format: date }
+
+    ErrorResponse:
+      type: object
+      required: [code, message, timestamp]
+      properties:
+        code: { type: string }
+        message: { type: string }
+        correlationId: { type: string }
+        timestamp: { type: string, format: date-time }
+        details:
+          type: array
+          items: { type: string }

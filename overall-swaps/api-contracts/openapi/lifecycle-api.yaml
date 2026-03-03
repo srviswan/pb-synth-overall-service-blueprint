@@ -1,0 +1,158 @@
+openapi: 3.0.3
+info:
+  title: Lifecycle Engine API
+  version: 1.0.0
+  description: Contract for submitting CDM primitive instructions to lifecycle orchestration.
+servers:
+  - url: /lifecycle-engine
+paths:
+  /v1/instructions:
+    post:
+      summary: Submit primitive instruction
+      operationId: submitInstruction
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/CorrelationId"
+        - $ref: "#/components/parameters/UserContext"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PrimitiveInstructionEnvelope"
+      responses:
+        "202":
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InstructionAcceptedResponse"
+        "400":
+          description: Invalid payload
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Duplicate idempotency key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+components:
+  parameters:
+    IdempotencyKey:
+      in: header
+      name: Idempotency-Key
+      required: true
+      schema:
+        type: string
+    CorrelationId:
+      in: header
+      name: X-Correlation-Id
+      required: true
+      schema:
+        type: string
+    UserContext:
+      in: header
+      name: X-User-Context
+      required: false
+      schema:
+        type: string
+
+  schemas:
+    PrimitiveInstructionEnvelope:
+      type: object
+      required:
+        - instructionType
+        - tradeKey
+        - payload
+        - metadata
+      properties:
+        instructionType:
+          type: string
+          enum:
+            - ExecutionInstruction
+            - QuantityChangeInstruction
+            - ResetInstruction
+            - TransferInstruction
+            - TermsChangeInstruction
+            - PartyChangeInstruction
+            - ContractFormationInstruction
+        tradeKey:
+          type: string
+        payload:
+          type: object
+          description: CDM-aligned primitive instruction body.
+          additionalProperties: true
+        metadata:
+          $ref: "#/components/schemas/Metadata"
+        userContext:
+          $ref: "#/components/schemas/UserContext"
+
+    InstructionAcceptedResponse:
+      type: object
+      required: [instructionId, status, queuedAt]
+      properties:
+        instructionId:
+          type: string
+        status:
+          type: string
+          enum: [ACCEPTED]
+        queuedAt:
+          type: string
+          format: date-time
+
+    Metadata:
+      type: object
+      required: [sourceSystem, receivedAt]
+      properties:
+        sourceSystem:
+          type: string
+        receivedAt:
+          type: string
+          format: date-time
+        correlationId:
+          type: string
+        causationId:
+          type: string
+
+    UserContext:
+      type: object
+      properties:
+        userId:
+          type: string
+        roles:
+          type: array
+          items: { type: string }
+        accountIds:
+          type: array
+          items: { type: string }
+        bookIds:
+          type: array
+          items: { type: string }
+
+    ErrorResponse:
+      type: object
+      required: [code, message, timestamp]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        correlationId:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        details:
+          type: array
+          items:
+            type: string

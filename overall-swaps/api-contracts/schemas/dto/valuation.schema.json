@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "valuation.schema.json",
+  "title": "Valuation DTO Schemas",
+  "type": "object",
+  "definitions": {
+    "CalculateValuationRequest": {
+      "type": "object",
+      "required": ["asOfDate", "method"],
+      "properties": {
+        "tradeId": { "type": "string" },
+        "positionKey": { "type": "string" },
+        "asOfDate": { "type": "string", "format": "date" },
+        "method": { "type": "string", "enum": ["MTM", "COST_BASIS"] },
+        "pricingContext": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    },
+    "ValuationResponse": {
+      "type": "object",
+      "required": ["valuationId", "asOfDate", "method", "amount", "currency"],
+      "properties": {
+        "valuationId": { "type": "string" },
+        "tradeId": { "type": "string" },
+        "positionKey": { "type": "string" },
+        "asOfDate": { "type": "string", "format": "date" },
+        "method": { "type": "string", "enum": ["MTM", "COST_BASIS"] },
+        "amount": { "type": "number" },
+        "currency": { "type": "string", "minLength": 3, "maxLength": 3 },
+        "pnl": { "type": "number" },
+        "computedAt": { "type": "string", "format": "date-time" },
+        "marketDataSnapshotId": { "type": "string" }
+      }
+    },
+    "ValuationQueryResponse": {
+      "type": "object",
+      "properties": {
+        "valuations": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/ValuationResponse" }
+        }
+      }
+    }
+  }
+}

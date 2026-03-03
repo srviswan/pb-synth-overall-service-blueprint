@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "position.schema.json",
+  "title": "Position DTO Schemas",
+  "type": "object",
+  "definitions": {
+    "CreateTradeLotRequest": {
+      "type": "object",
+      "required": [
+        "tradeId",
+        "accountId",
+        "bookId",
+        "securityId",
+        "direction",
+        "quantity",
+        "tradeDate",
+        "settlementDate"
+      ],
+      "properties": {
+        "tradeId": { "type": "string" },
+        "accountId": { "type": "string" },
+        "bookId": { "type": "string" },
+        "securityId": { "type": "string" },
+        "direction": { "type": "string", "enum": ["LONG", "SHORT"] },
+        "quantity": { "type": "number" },
+        "settledQuantity": { "type": "number" },
+        "tradeDate": { "type": "string", "format": "date" },
+        "settlementDate": { "type": "string", "format": "date" }
+      }
+    },
+    "SettledQuantityResponse": {
+      "type": "object",
+      "required": ["lotId", "settledQuantity", "settlementDate"],
+      "properties": {
+        "lotId": { "type": "string" },
+        "settledQuantity": { "type": "number" },
+        "settlementDate": { "type": "string", "format": "date" },
+        "asOfDate": { "type": "string", "format": "date" }
+      }
+    }
+  }
+}

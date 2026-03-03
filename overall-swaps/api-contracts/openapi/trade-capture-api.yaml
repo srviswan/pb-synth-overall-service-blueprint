@@ -1,0 +1,232 @@
+openapi: 3.0.3
+info:
+  title: Trade Capture Service API
+  version: 1.0.0
+  description: Intake APIs for allocated trades and batch ingestion from AMS.
+servers:
+  - url: /trade-capture-service
+paths:
+  /v1/trades:
+    post:
+      summary: Capture a single allocated trade
+      operationId: captureTrade
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: X-Correlation-Id
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: X-User-Context
+          required: false
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CaptureTradeRequest"
+      responses:
+        "202":
+          description: Accepted for downstream lifecycle processing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CaptureTradeAcceptedResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Duplicate idempotency key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /v1/trades:batch:
+    post:
+      summary: Capture batch of allocated trades
+      operationId: captureTradeBatch
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: X-Correlation-Id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CaptureTradeBatchRequest"
+      responses:
+        "202":
+          description: Batch accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CaptureTradeBatchAcceptedResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /v1/trades/{ingestionId}:
+    get:
+      summary: Get ingestion status for a captured trade
+      operationId: getTradeIngestionStatus
+      parameters:
+        - in: path
+          name: ingestionId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Ingestion status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TradeIngestionStatusResponse"
+        "404":
+          description: Ingestion record not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+components:
+  schemas:
+    CaptureTradeRequest:
+      type: object
+      required:
+        - sourceSystem
+        - tradeExternalId
+        - accountId
+        - bookId
+        - securityId
+        - direction
+        - quantity
+        - price
+        - tradeDate
+      properties:
+        sourceSystem:
+          type: string
+          example: AMS
+        tradeExternalId:
+          type: string
+        accountId:
+          type: string
+        bookId:
+          type: string
+        securityId:
+          type: string
+        direction:
+          type: string
+          enum: [BUY, SELL]
+        quantity:
+          type: number
+        price:
+          type: number
+        tradeDate:
+          type: string
+          format: date
+        settlementDate:
+          type: string
+          format: date
+        productId:
+          type: string
+        metadata:
+          type: object
+          additionalProperties: true
+
+    CaptureTradeAcceptedResponse:
+      type: object
+      required: [ingestionId, status, acceptedAt]
+      properties:
+        ingestionId:
+          type: string
+        status:
+          type: string
+          enum: [ACCEPTED]
+        acceptedAt:
+          type: string
+          format: date-time
+        lifecycleInstructionType:
+          type: string
+          example: ExecutionInstruction
+
+    CaptureTradeBatchRequest:
+      type: object
+      required: [sourceSystem, trades]
+      properties:
+        sourceSystem:
+          type: string
+        trades:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/CaptureTradeRequest"
+
+    CaptureTradeBatchAcceptedResponse:
+      type: object
+      required: [batchId, status, acceptedCount]
+      properties:
+        batchId:
+          type: string
+        status:
+          type: string
+          enum: [ACCEPTED]
+        acceptedCount:
+          type: integer
+        rejectedCount:
+          type: integer
+
+    TradeIngestionStatusResponse:
+      type: object
+      required: [ingestionId, status]
+      properties:
+        ingestionId:
+          type: string
+        status:
+          type: string
+          enum: [ACCEPTED, QUEUED, SENT_TO_LIFECYCLE, FAILED]
+        lastUpdatedAt:
+          type: string
+          format: date-time
+        failureReason:
+          type: string
+
+    ErrorResponse:
+      type: object
+      required: [code, message, timestamp]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        correlationId:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        details:
+          type: array
+          items:
+            type: string

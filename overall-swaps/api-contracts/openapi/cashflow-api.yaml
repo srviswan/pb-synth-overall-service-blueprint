@@ -1,0 +1,189 @@
+openapi: 3.0.3
+info:
+  title: Cashflow Service API
+  version: 1.0.0
+  description: Contracts for schedule generation, settlement, and recalculation.
+servers:
+  - url: /cashflow-service
+paths:
+  /v1/cashflows/schedule:
+    post:
+      summary: Create future cashflow schedule
+      operationId: createCashflowSchedule
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/CorrelationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCashflowScheduleRequest"
+      responses:
+        "201":
+          description: Schedule created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CashflowScheduleResponse"
+
+  /v1/cashflows/settle:
+    post:
+      summary: Record realized settlement transfer
+      operationId: settleCashflow
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/CorrelationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SettleCashflowRequest"
+      responses:
+        "200":
+          description: Settlement recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SettlementResponse"
+
+  /v1/cashflows/recalculate:
+    post:
+      summary: Recalculate projections using latest reset/market data
+      operationId: recalculateCashflows
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RecalculateCashflowRequest"
+      responses:
+        "200":
+          description: Recalculation result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecalculateCashflowResponse"
+
+components:
+  parameters:
+    IdempotencyKey:
+      in: header
+      name: Idempotency-Key
+      required: true
+      schema: { type: string }
+    CorrelationId:
+      in: header
+      name: X-Correlation-Id
+      required: true
+      schema: { type: string }
+
+  schemas:
+    CreateCashflowScheduleRequest:
+      type: object
+      required: [tradeId, scheduleStartDate, scheduleEndDate, paymentFrequency]
+      properties:
+        tradeId: { type: string }
+        scheduleStartDate: { type: string, format: date }
+        scheduleEndDate: { type: string, format: date }
+        paymentFrequency: { type: string, example: 1M }
+        nettingMode:
+          type: string
+          enum: [FULL_NET_SINGLE_TRANSFER, LEG_LEVEL]
+        commonSettlementCurrency:
+          type: string
+          minLength: 3
+          maxLength: 3
+
+    CashflowScheduleResponse:
+      type: object
+      properties:
+        scheduleId: { type: string }
+        tradeId: { type: string }
+        cashflows:
+          type: array
+          items:
+            $ref: "#/components/schemas/CashflowItem"
+
+    SettleCashflowRequest:
+      type: object
+      required: [tradeId, settlementDate, commonSettlementCurrency, legCashflows]
+      properties:
+        tradeId: { type: string }
+        settlementDate: { type: string, format: date }
+        commonSettlementCurrency:
+          type: string
+          minLength: 3
+          maxLength: 3
+        legCashflows:
+          type: array
+          items:
+            $ref: "#/components/schemas/LegCashflow"
+        fxFixings:
+          type: array
+          items:
+            $ref: "#/components/schemas/FxFixing"
+
+    SettlementResponse:
+      type: object
+      required: [tradeId, settlementDate, netTransferAmount, currency]
+      properties:
+        tradeId: { type: string }
+        settlementDate: { type: string, format: date }
+        netTransferAmount: { type: number }
+        currency: { type: string, minLength: 3, maxLength: 3 }
+        transferId: { type: string }
+
+    RecalculateCashflowRequest:
+      type: object
+      required: [tradeId, asOfDate]
+      properties:
+        tradeId: { type: string }
+        asOfDate: { type: string, format: date }
+        reason:
+          type: string
+          enum: [RESET_EVENT, MARKET_DATA_UPDATE, TERMS_CHANGE]
+
+    RecalculateCashflowResponse:
+      type: object
+      properties:
+        tradeId: { type: string }
+        asOfDate: { type: string, format: date }
+        updatedCashflows:
+          type: array
+          items:
+            $ref: "#/components/schemas/CashflowItem"
+
+    CashflowItem:
+      type: object
+      properties:
+        cashflowId: { type: string }
+        paymentDate: { type: string, format: date }
+        legPairId: { type: string }
+        amount: { type: number }
+        currency: { type: string, minLength: 3, maxLength: 3 }
+        status:
+          type: string
+          enum: [PROJECTED, SETTLED]
+
+    LegCashflow:
+      type: object
+      required: [legPairId, amount, currency]
+      properties:
+        legPairId: { type: string }
+        amount: { type: number }
+        currency: { type: string, minLength: 3, maxLength: 3 }
+        direction:
+          type: string
+          enum: [Party1PaysParty2, Party2PaysParty1]
+
+    FxFixing:
+      type: object
+      required: [fxRuleId, sourceCurrency, targetCurrency, rate]
+      properties:
+        fxRuleId: { type: string }
+        sourceCurrency: { type: string, minLength: 3, maxLength: 3 }
+        targetCurrency: { type: string, minLength: 3, maxLength: 3 }
+        rate: { type: number }
+        fixingTimestamp: { type: string, format: date-time }

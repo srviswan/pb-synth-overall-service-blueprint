@@ -1,0 +1,87 @@
+openapi: 3.0.3
+info:
+  title: IAM Service API
+  version: 1.0.0
+  description: Token validation and entitlement checks for API gateway and services.
+servers:
+  - url: /iam-service
+paths:
+  /v1/token/validate:
+    post:
+      summary: Validate JWT access token
+      operationId: validateToken
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TokenValidationRequest"
+      responses:
+        "200":
+          description: Token validation result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenValidationResponse"
+
+  /v1/entitlements/check:
+    post:
+      summary: Check function and data access entitlements
+      operationId: checkEntitlement
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EntitlementCheckRequest"
+      responses:
+        "200":
+          description: Entitlement evaluation result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EntitlementCheckResponse"
+
+components:
+  schemas:
+    TokenValidationRequest:
+      type: object
+      required: [token]
+      properties:
+        token: { type: string }
+
+    TokenValidationResponse:
+      type: object
+      required: [valid]
+      properties:
+        valid: { type: boolean }
+        userId: { type: string }
+        roles:
+          type: array
+          items: { type: string }
+        expiresAt:
+          type: string
+          format: date-time
+
+    EntitlementCheckRequest:
+      type: object
+      required: [userId, functionName]
+      properties:
+        userId: { type: string }
+        functionName: { type: string, example: trade:create }
+        accountId: { type: string }
+        bookId: { type: string }
+        securityId: { type: string }
+        attributes:
+          type: object
+          additionalProperties: true
+
+    EntitlementCheckResponse:
+      type: object
+      required: [authorized]
+      properties:
+        authorized: { type: boolean }
+        denialReason: { type: string }
+        evaluatedPolicies:
+          type: array
+          items: { type: string }

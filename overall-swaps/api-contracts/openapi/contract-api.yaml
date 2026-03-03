@@ -1,0 +1,158 @@
+openapi: 3.0.3
+info:
+  title: Contract Service API
+  version: 1.0.0
+  description: Product, economic terms, legal agreement linking, and terms validation.
+servers:
+  - url: /contract-service
+paths:
+  /v1/products/{productId}:
+    get:
+      summary: Get product definition and economic terms
+      operationId: getProduct
+      parameters:
+        - in: path
+          name: productId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Product details
+          content:
+            application/json:
+              schema:
+                $ref: "../schemas/dto/contract.schema.json#/definitions/ProductResponse"
+              examples:
+                multiBasketMultiCcy:
+                  summary: Product with payout-level terms
+                  value:
+                    productId: PRD-EQSWAP-MULTI-001
+                    productType: EQUITY_SWAP
+                    version: 3
+                    economicTerms:
+                      effectiveDate: "2026-03-02"
+                      terminationDate: "2027-03-02"
+                      payout:
+                        - type: PerformancePayout
+                          payerReceiver:
+                            payer: Party1
+                            receiver: Party2
+                          underlier:
+                            basketId: BASKET-EUR-01
+                            basketVersion: 4
+                            constituents:
+                              - ticker: AIR.PA
+                                weight: 0.55
+                                notionalAmount: 27500000
+                                isCash: false
+                              - ticker: SAP.DE
+                                weight: 0.45
+                                notionalAmount: 22500000
+                                isCash: false
+                          returnTerms:
+                            returnType: Total
+                            dividendTreatment: ExDate
+                          valuationDates:
+                            finalValuationDate: "2027-02-26"
+                            valuationFrequency: 1M
+                          paymentDates:
+                            payRelativeTo: CalculationPeriodEndDate
+                            paymentFrequency: 1M
+                          priceQuantity:
+                            quantitySchedule:
+                              value: 50000000
+                              unit:
+                                currency: EUR
+                            reset: true
+                          x-legPairId: LP-EUR-001
+                          x-legCurrency: EUR
+                          x-fxRuleId: FX-EUR-USD
+                        - type: InterestRatePayout
+                          payerReceiver:
+                            payer: Party2
+                            receiver: Party1
+                          rateSpecification:
+                            rateType: Floating
+                            floatingRateIndex: EURIBOR
+                            spreadBps: 120
+                            tenor: 3M
+                          dayCountFraction: ACT_360
+                          paymentDates:
+                            payRelativeTo: CalculationPeriodEndDate
+                            paymentFrequency: 1M
+                          priceQuantity:
+                            quantitySchedule:
+                              value: 50000000
+                              unit:
+                                currency: EUR
+                            reset: true
+                          x-legPairId: LP-EUR-001
+                          x-legCurrency: EUR
+                          x-fxRuleId: FX-EUR-USD
+                    legalAgreementIds:
+                      - ISDA-2026-A
+                    extensions:
+                      x-commonSettlementPolicy:
+                        commonSettlementCurrency: USD
+                        nettingMode: FULL_NET_SINGLE_TRANSFER
+        "404":
+          description: Product not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /v1/contracts/{contractId}/link-trade:
+    post:
+      summary: Link legal contract to trade
+      operationId: linkTradeToContract
+      parameters:
+        - in: path
+          name: contractId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/dto/contract.schema.json#/definitions/LinkTradeRequest"
+      responses:
+        "200":
+          description: Link successful
+          content:
+            application/json:
+              schema:
+                $ref: "../schemas/dto/contract.schema.json#/definitions/LinkTradeResponse"
+
+  /v1/terms:validate:
+    post:
+      summary: Validate economic terms payload
+      operationId: validateTerms
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/dto/contract.schema.json#/definitions/EconomicTerms"
+      responses:
+        "200":
+          description: Validation result
+          content:
+            application/json:
+              schema:
+                $ref: "../schemas/dto/contract.schema.json#/definitions/TermsValidationResponse"
+
+components:
+  schemas:
+    ErrorResponse:
+      type: object
+      required: [code, message, timestamp]
+      properties:
+        code: { type: string }
+        message: { type: string }
+        correlationId: { type: string }
+        timestamp: { type: string, format: date-time }
+        details:
+          type: array
+          items: { type: string }

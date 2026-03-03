@@ -1,0 +1,172 @@
+openapi: 3.0.3
+info:
+  title: Valuation Service API
+  version: 1.0.0
+  description: MTM and cost-basis valuation contracts.
+servers:
+  - url: /valuation-service
+paths:
+  /v1/valuations/calculate:
+    post:
+      summary: Trigger valuation calculation for a trade/position
+      operationId: calculateValuation
+      parameters:
+        - in: header
+          name: X-Correlation-Id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CalculateValuationRequest"
+      responses:
+        "200":
+          description: Valuation computed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValuationResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /v1/valuations:
+    get:
+      summary: Query valuations by trade or position key
+      operationId: queryValuations
+      parameters:
+        - in: query
+          name: tradeId
+          required: false
+          schema:
+            type: string
+        - in: query
+          name: positionKey
+          required: false
+          schema:
+            type: string
+        - in: query
+          name: asOfDate
+          required: false
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: method
+          required: false
+          schema:
+            type: string
+            enum: [MTM, COST_BASIS]
+      responses:
+        "200":
+          description: Valuation list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValuationQueryResponse"
+
+  /v1/valuations/{valuationId}:
+    get:
+      summary: Get valuation by id
+      operationId: getValuationById
+      parameters:
+        - in: path
+          name: valuationId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Valuation details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValuationResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+components:
+  schemas:
+    CalculateValuationRequest:
+      type: object
+      required: [asOfDate, method]
+      properties:
+        tradeId:
+          type: string
+        positionKey:
+          type: string
+        asOfDate:
+          type: string
+          format: date
+        method:
+          type: string
+          enum: [MTM, COST_BASIS]
+        pricingContext:
+          type: object
+          additionalProperties: true
+
+    ValuationResponse:
+      type: object
+      required: [valuationId, asOfDate, method, amount, currency]
+      properties:
+        valuationId:
+          type: string
+        tradeId:
+          type: string
+        positionKey:
+          type: string
+        asOfDate:
+          type: string
+          format: date
+        method:
+          type: string
+          enum: [MTM, COST_BASIS]
+        amount:
+          type: number
+        currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+        pnl:
+          type: number
+        computedAt:
+          type: string
+          format: date-time
+        marketDataSnapshotId:
+          type: string
+
+    ValuationQueryResponse:
+      type: object
+      properties:
+        valuations:
+          type: array
+          items:
+            $ref: "#/components/schemas/ValuationResponse"
+
+    ErrorResponse:
+      type: object
+      required: [code, message, timestamp]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        correlationId:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        details:
+          type: array
+          items:
+            type: string

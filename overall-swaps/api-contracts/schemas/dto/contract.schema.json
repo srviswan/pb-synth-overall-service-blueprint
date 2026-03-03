@@ -1,0 +1,205 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "contract.schema.json",
+  "title": "Contract DTO Schemas",
+  "type": "object",
+  "definitions": {
+    "ProductResponse": {
+      "type": "object",
+      "required": ["productId", "productType", "economicTerms"],
+      "properties": {
+        "productId": { "type": "string" },
+        "productType": { "type": "string" },
+        "version": { "type": "integer" },
+        "economicTerms": { "$ref": "#/definitions/EconomicTerms" },
+        "legalAgreementIds": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "extensions": {
+          "type": "object",
+          "properties": {
+            "x-commonSettlementPolicy": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          }
+        }
+      }
+    },
+    "EconomicTerms": {
+      "type": "object",
+      "required": ["effectiveDate", "terminationDate", "payout"],
+      "properties": {
+        "effectiveDate": { "type": "string", "format": "date" },
+        "terminationDate": { "type": "string", "format": "date" },
+        "payout": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/definitions/Payout" }
+        }
+      }
+    },
+    "Payout": {
+      "oneOf": [
+        { "$ref": "#/definitions/PerformancePayout" },
+        { "$ref": "#/definitions/InterestRatePayout" }
+      ]
+    },
+    "PerformancePayout": {
+      "type": "object",
+      "required": ["type", "payerReceiver", "priceQuantity"],
+      "properties": {
+        "type": { "type": "string", "const": "PerformancePayout" },
+        "payerReceiver": { "$ref": "#/definitions/PayerReceiver" },
+        "underlier": { "$ref": "#/definitions/Underlier" },
+        "returnTerms": { "$ref": "#/definitions/ReturnTerms" },
+        "valuationDates": { "$ref": "#/definitions/ValuationDates" },
+        "paymentDates": { "$ref": "#/definitions/PaymentDates" },
+        "priceQuantity": { "$ref": "#/definitions/PriceQuantity" },
+        "x-legPairId": { "type": "string" },
+        "x-legCurrency": { "$ref": "#/definitions/CurrencyCode" },
+        "x-fxRuleId": { "type": "string" }
+      }
+    },
+    "InterestRatePayout": {
+      "type": "object",
+      "required": ["type", "payerReceiver", "priceQuantity"],
+      "properties": {
+        "type": { "type": "string", "const": "InterestRatePayout" },
+        "payerReceiver": { "$ref": "#/definitions/PayerReceiver" },
+        "rateSpecification": { "$ref": "#/definitions/RateSpecification" },
+        "dayCountFraction": { "type": "string" },
+        "paymentDates": { "$ref": "#/definitions/PaymentDates" },
+        "priceQuantity": { "$ref": "#/definitions/PriceQuantity" },
+        "x-legPairId": { "type": "string" },
+        "x-legCurrency": { "$ref": "#/definitions/CurrencyCode" },
+        "x-fxRuleId": { "type": "string" }
+      }
+    },
+    "PayerReceiver": {
+      "type": "object",
+      "required": ["payer", "receiver"],
+      "properties": {
+        "payer": { "type": "string", "enum": ["Party1", "Party2"] },
+        "receiver": { "type": "string", "enum": ["Party1", "Party2"] }
+      }
+    },
+    "Underlier": {
+      "type": "object",
+      "properties": {
+        "basketId": { "type": "string" },
+        "basketVersion": { "type": "integer" },
+        "constituents": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/BasketConstituent" }
+        }
+      }
+    },
+    "BasketConstituent": {
+      "type": "object",
+      "required": ["ticker", "weight", "isCash"],
+      "properties": {
+        "ticker": { "type": "string" },
+        "weight": { "type": "number" },
+        "notionalAmount": { "type": "number" },
+        "isCash": { "type": "boolean" }
+      }
+    },
+    "ReturnTerms": {
+      "type": "object",
+      "properties": {
+        "returnType": { "type": "string", "enum": ["Price", "Total"] },
+        "dividendTreatment": { "type": "string" }
+      }
+    },
+    "ValuationDates": {
+      "type": "object",
+      "properties": {
+        "finalValuationDate": { "type": "string", "format": "date" },
+        "valuationFrequency": { "type": "string", "example": "1M" }
+      }
+    },
+    "PaymentDates": {
+      "type": "object",
+      "properties": {
+        "payRelativeTo": { "type": "string" },
+        "paymentFrequency": { "type": "string", "example": "1M" }
+      }
+    },
+    "PriceQuantity": {
+      "type": "object",
+      "required": ["quantitySchedule"],
+      "properties": {
+        "quantitySchedule": {
+          "type": "object",
+          "required": ["value", "unit"],
+          "properties": {
+            "value": { "type": "number" },
+            "unit": {
+              "type": "object",
+              "required": ["currency"],
+              "properties": {
+                "currency": { "$ref": "#/definitions/CurrencyCode" }
+              }
+            }
+          }
+        },
+        "reset": { "type": "boolean" }
+      }
+    },
+    "RateSpecification": {
+      "type": "object",
+      "properties": {
+        "rateType": { "type": "string", "enum": ["Fixed", "Floating"] },
+        "fixedRate": { "type": "number" },
+        "floatingRateIndex": { "type": "string" },
+        "spreadBps": { "type": "number" },
+        "tenor": { "type": "string", "example": "3M" }
+      }
+    },
+    "CurrencyCode": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 3
+    },
+    "LinkTradeRequest": {
+      "type": "object",
+      "required": ["tradeId"],
+      "properties": {
+        "tradeId": { "type": "string" },
+        "productId": { "type": "string" },
+        "linkType": {
+          "type": "string",
+          "enum": ["MASTER_AGREEMENT", "CONFIRMATION", "CSA"]
+        }
+      }
+    },
+    "LinkTradeResponse": {
+      "type": "object",
+      "properties": {
+        "contractId": { "type": "string" },
+        "tradeId": { "type": "string" },
+        "status": {
+          "type": "string",
+          "enum": ["LINKED"]
+        }
+      }
+    },
+    "TermsValidationResponse": {
+      "type": "object",
+      "required": ["valid"],
+      "properties": {
+        "valid": { "type": "boolean" },
+        "errors": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "warnings": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    }
+  }
+}

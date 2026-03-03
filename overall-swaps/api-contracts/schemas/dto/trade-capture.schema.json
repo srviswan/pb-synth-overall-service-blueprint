@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "trade-capture.schema.json",
+  "title": "Trade Capture DTO Schemas",
+  "type": "object",
+  "definitions": {
+    "CaptureTradeRequest": {
+      "type": "object",
+      "required": [
+        "sourceSystem",
+        "tradeExternalId",
+        "accountId",
+        "bookId",
+        "securityId",
+        "direction",
+        "quantity",
+        "price",
+        "tradeDate"
+      ],
+      "properties": {
+        "sourceSystem": { "type": "string" },
+        "tradeExternalId": { "type": "string" },
+        "accountId": { "type": "string" },
+        "bookId": { "type": "string" },
+        "securityId": { "type": "string" },
+        "direction": { "type": "string", "enum": ["BUY", "SELL"] },
+        "quantity": { "type": "number" },
+        "price": { "type": "number" },
+        "tradeDate": { "type": "string", "format": "date" },
+        "settlementDate": { "type": "string", "format": "date" },
+        "productId": { "type": "string" },
+        "metadata": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    },
+    "CaptureTradeAcceptedResponse": {
+      "type": "object",
+      "required": ["ingestionId", "status", "acceptedAt"],
+      "properties": {
+        "ingestionId": { "type": "string" },
+        "status": { "type": "string", "enum": ["ACCEPTED"] },
+        "acceptedAt": { "type": "string", "format": "date-time" },
+        "lifecycleInstructionType": { "type": "string" }
+      }
+    },
+    "CaptureTradeBatchRequest": {
+      "type": "object",
+      "required": ["sourceSystem", "trades"],
+      "properties": {
+        "sourceSystem": { "type": "string" },
+        "trades": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/definitions/CaptureTradeRequest" }
+        }
+      }
+    },
+    "TradeIngestionStatusResponse": {
+      "type": "object",
+      "required": ["ingestionId", "status"],
+      "properties": {
+        "ingestionId": { "type": "string" },
+        "status": {
+          "type": "string",
+          "enum": ["ACCEPTED", "QUEUED", "SENT_TO_LIFECYCLE", "FAILED"]
+        },
+        "lastUpdatedAt": { "type": "string", "format": "date-time" },
+        "failureReason": { "type": "string" }
+      }
+    }
+  }
+}

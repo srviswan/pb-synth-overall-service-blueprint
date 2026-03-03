@@ -1,0 +1,102 @@
+openapi: 3.0.3
+info:
+  title: Reset Service API
+  version: 1.0.0
+  description: Contracts for reset observation capture and history lookup.
+servers:
+  - url: /reset-service
+paths:
+  /v1/resets:
+    post:
+      summary: Record reset observation
+      operationId: createReset
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: { type: string }
+        - in: header
+          name: X-Correlation-Id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateResetRequest"
+      responses:
+        "201":
+          description: Reset recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResetResponse"
+
+  /v1/resets/{tradeId}/history:
+    get:
+      summary: Fetch reset history by trade
+      operationId: getResetHistory
+      parameters:
+        - in: path
+          name: tradeId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Reset history
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResetHistoryResponse"
+
+components:
+  schemas:
+    CreateResetRequest:
+      type: object
+      required: [tradeId, resetDate, observationDate, observationType, observedValue, currency]
+      properties:
+        tradeId: { type: string }
+        lotId: { type: string }
+        resetDate: { type: string, format: date }
+        observationDate: { type: string, format: date }
+        observationType:
+          type: string
+          enum: [EQUITY_PRICE, INTEREST_RATE, FX_RATE, INDEX_LEVEL]
+        observedValue: { type: number }
+        currency: { type: string, minLength: 3, maxLength: 3 }
+        sourceSystem: { type: string }
+        qualityFlag:
+          type: string
+          enum: [OK, SUSPECT, ESTIMATED]
+
+    ResetResponse:
+      type: object
+      properties:
+        resetId: { type: string }
+        tradeId: { type: string }
+        resetDate: { type: string, format: date }
+        status:
+          type: string
+          enum: [RECORDED]
+
+    ResetHistoryResponse:
+      type: object
+      properties:
+        tradeId: { type: string }
+        resets:
+          type: array
+          items:
+            $ref: "#/components/schemas/ResetHistoryItem"
+
+    ResetHistoryItem:
+      type: object
+      properties:
+        resetId: { type: string }
+        resetDate: { type: string, format: date }
+        observationDate: { type: string, format: date }
+        observationType: { type: string }
+        observedValue: { type: number }
+        currency: { type: string }
+        sourceSystem: { type: string }
+        qualityFlag: { type: string }

@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "common.schema.json",
+  "title": "Common DTO Schemas",
+  "type": "object",
+  "definitions": {
+    "ErrorResponse": {
+      "type": "object",
+      "required": ["code", "message", "timestamp"],
+      "properties": {
+        "code": { "type": "string" },
+        "message": { "type": "string" },
+        "correlationId": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "details": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "Metadata": {
+      "type": "object",
+      "required": ["sourceSystem", "receivedAt"],
+      "properties": {
+        "sourceSystem": { "type": "string" },
+        "receivedAt": { "type": "string", "format": "date-time" },
+        "correlationId": { "type": "string" },
+        "causationId": { "type": "string" }
+      }
+    },
+    "UserContext": {
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "roles": { "type": "array", "items": { "type": "string" } },
+        "accountIds": { "type": "array", "items": { "type": "string" } },
+        "bookIds": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  }
+}

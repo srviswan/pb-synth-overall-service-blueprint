@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "cashflow.schema.json",
+  "title": "Cashflow DTO Schemas",
+  "type": "object",
+  "definitions": {
+    "SettleCashflowRequest": {
+      "type": "object",
+      "required": [
+        "tradeId",
+        "settlementDate",
+        "commonSettlementCurrency",
+        "legCashflows"
+      ],
+      "properties": {
+        "tradeId": { "type": "string" },
+        "settlementDate": { "type": "string", "format": "date" },
+        "commonSettlementCurrency": { "type": "string", "minLength": 3, "maxLength": 3 },
+        "legCashflows": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/LegCashflow" }
+        },
+        "fxFixings": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/FxFixing" }
+        }
+      }
+    },
+    "LegCashflow": {
+      "type": "object",
+      "required": ["legPairId", "amount", "currency"],
+      "properties": {
+        "legPairId": { "type": "string" },
+        "amount": { "type": "number" },
+        "currency": { "type": "string", "minLength": 3, "maxLength": 3 },
+        "direction": {
+          "type": "string",
+          "enum": ["Party1PaysParty2", "Party2PaysParty1"]
+        }
+      }
+    },
+    "FxFixing": {
+      "type": "object",
+      "required": ["fxRuleId", "sourceCurrency", "targetCurrency", "rate"],
+      "properties": {
+        "fxRuleId": { "type": "string" },
+        "sourceCurrency": { "type": "string", "minLength": 3, "maxLength": 3 },
+        "targetCurrency": { "type": "string", "minLength": 3, "maxLength": 3 },
+        "rate": { "type": "number" }
+      }
+    }
+  }
+}

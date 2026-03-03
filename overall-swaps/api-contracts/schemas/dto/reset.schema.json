@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "reset.schema.json",
+  "title": "Reset DTO Schemas",
+  "type": "object",
+  "definitions": {
+    "CreateResetRequest": {
+      "type": "object",
+      "required": [
+        "tradeId",
+        "resetDate",
+        "observationDate",
+        "observationType",
+        "observedValue",
+        "currency"
+      ],
+      "properties": {
+        "tradeId": { "type": "string" },
+        "lotId": { "type": "string" },
+        "resetDate": { "type": "string", "format": "date" },
+        "observationDate": { "type": "string", "format": "date" },
+        "observationType": {
+          "type": "string",
+          "enum": ["EQUITY_PRICE", "INTEREST_RATE", "FX_RATE", "INDEX_LEVEL"]
+        },
+        "observedValue": { "type": "number" },
+        "currency": { "type": "string", "minLength": 3, "maxLength": 3 }
+      }
+    }
+  }
+}
