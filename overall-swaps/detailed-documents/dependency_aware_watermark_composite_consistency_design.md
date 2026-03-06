@@ -580,11 +580,16 @@ Verify that the Data Product Hub returns a composite result (`Transaction + Posi
 ### 16.1 SQL Schema
 
 ```sql
-create table stream_watermark (
-  stream_name text primary key,
-  watermark_ts timestamptz not null
+-- Store watermark by stream + partition for correctness in partitioned topics.
+create table stream_partition_watermark (
+  stream_name text not null,
+  partition_id int not null,
+  watermark_ts timestamptz not null,
+  updated_at timestamptz not null default now(),
+  primary key (stream_name, partition_id)
 );
 
+-- Canonical composite read model table (subset for Spring sample).
 create table composite_trade_view (
   trade_key text not null,
   correlation_id text not null,
@@ -592,18 +597,54 @@ create table composite_trade_view (
   transaction_event_ts timestamptz,
   position_event_ts timestamptz,
   contract_event_ts timestamptz,
+  last_event_at timestamptz,
 
   transaction_data jsonb,
   position_data jsonb,
   contract_data jsonb,
 
+  transaction_version bigint,
+  position_version bigint,
+  contract_version bigint,
+
   watermark_consistent boolean not null default false,
   last_composite_watermark timestamptz,
+  updated_at timestamptz not null default now(),
 
   primary key (trade_key, correlation_id)
 );
 
 create index idx_trade_consistent on composite_trade_view (trade_key, watermark_consistent);
+create index idx_trade_last_event on composite_trade_view (trade_key, last_event_at desc);
+create index idx_wm_lookup on stream_partition_watermark (stream_name, watermark_ts);
+```
+
+```sql
+-- Optional helper view: stream watermark = MIN over partitions.
+create view stream_watermark as
+select
+  stream_name,
+  min(watermark_ts) as watermark_ts
+from stream_partition_watermark
+group by stream_name;
+
+-- Example strict consistency query for one trade:
+-- all required product timestamps must be <= current composite watermark.
+with composite_wm as (
+  select min(watermark_ts) as wm
+  from stream_watermark
+  where stream_name in ('transaction', 'position', 'contract')
+)
+select c.*
+from composite_trade_view c
+cross join composite_wm w
+where c.trade_key = :tradeKey
+  and c.transaction_event_ts is not null
+  and c.position_event_ts is not null
+  and c.contract_event_ts is not null
+  and greatest(c.transaction_event_ts, c.position_event_ts, c.contract_event_ts) <= w.wm
+order by c.last_event_at desc
+limit 1;
 ```
 
 ### 16.2 Entity Model (Simplified)
