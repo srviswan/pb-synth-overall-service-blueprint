@@ -1,0 +1,4 @@
+{
+  "install": "sudo apt-get update && sudo apt-get install -y maven docker.io docker-compose-v2",
+  "start": "if ! pgrep -x dockerd >/dev/null; then sudo dockerd --host=unix:///var/run/docker.sock --iptables=false --bridge=none --storage-driver=vfs >/tmp/dockerd.log 2>&1 & sleep 2; fi"
+}

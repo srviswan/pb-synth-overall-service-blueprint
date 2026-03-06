@@ -2,15 +2,14 @@ package com.pbsynth.tradecapture;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 import org.springframework.retry.annotation.EnableRetry;
 import org.springframework.scheduling.annotation.EnableScheduling;
-import com.pbsynth.tradecapture.config.DispatchProperties;
 
 @SpringBootApplication
 @EnableScheduling
 @EnableRetry
-@EnableConfigurationProperties(DispatchProperties.class)
+@ConfigurationPropertiesScan
 public class TradeCaptureApplication {
     public static void main(String[] args) {
         SpringApplication.run(TradeCaptureApplication.class, args);

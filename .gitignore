@@ -4,6 +4,8 @@
 # Local history / editor artifacts
 .history/
 .cursor/
+!.cursor/
+!.cursor/environment.json
 .vscode/
 .idea/
 

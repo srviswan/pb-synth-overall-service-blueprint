@@ -5,14 +5,18 @@ spring:
   application:
     name: trade-capture-service
   datasource:
-    url: jdbc:h2:mem:tradecapture;DB_CLOSE_DELAY=-1;MODE=PostgreSQL
-    driver-class-name: org.h2.Driver
-    username: sa
-    password:
+    url: ${SPRING_DATASOURCE_URL:jdbc:h2:mem:tradecapture;DB_CLOSE_DELAY=-1;MODE=PostgreSQL}
+    driver-class-name: ${SPRING_DATASOURCE_DRIVER_CLASS_NAME:org.h2.Driver}
+    username: ${SPRING_DATASOURCE_USERNAME:sa}
+    password: ${SPRING_DATASOURCE_PASSWORD:}
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: ${SPRING_JPA_HIBERNATE_DDL_AUTO:update}
     show-sql: false
+  sql:
+    init:
+      mode: ${SPRING_SQL_INIT_MODE:never}
+      platform: ${SPRING_SQL_INIT_PLATFORM:postgres}
 
 management:
   endpoints:
@@ -23,9 +27,37 @@ management:
     health:
       probes:
         enabled: true
+      group:
+        readiness:
+          include: db,lifecycleEngine
 
 tradecapture:
+  rules:
+    resource: classpath:rules-config.yml
+  messaging:
+    broker-type: ${TRADECAPTURE_MESSAGING_BROKER_TYPE:inmemory}
+    partition-count-max: ${TRADECAPTURE_MESSAGING_PARTITION_COUNT_MAX:64}
+    queue-capacity-per-partition: ${TRADECAPTURE_MESSAGING_QUEUE_CAPACITY_PER_PARTITION:10000}
+    solace:
+      enabled: ${TRADECAPTURE_MESSAGING_SOLACE_ENABLED:false}
+      queue: ${TRADECAPTURE_MESSAGING_SOLACE_QUEUE:trade/capture/input}
   dispatch:
-    lifecycle-base-url: http://localhost:8090
-    batch-size: 100
-    max-attempts: 5
+    worker-enabled: ${TRADECAPTURE_DISPATCH_WORKER_ENABLED:true}
+    poll-interval-ms: ${TRADECAPTURE_DISPATCH_POLL_INTERVAL_MS:1000}
+    base-backoff-ms: ${TRADECAPTURE_DISPATCH_BASE_BACKOFF_MS:1000}
+    targets:
+      - id: lifecycle-engine
+        type: http
+        url: ${TRADECAPTURE_DISPATCH_TARGET_LIFECYCLE_URL:http://localhost:8090/lifecycle-engine/v1/instructions}
+        enabled: true
+        max-attempts: 5
+        batch-size: 100
+      - id: audit-log
+        type: logging
+        enabled: true
+        max-attempts: 1
+        batch-size: 100
+
+logging:
+  pattern:
+    level: "%5p [corr=%X{correlationId:-na}]"
