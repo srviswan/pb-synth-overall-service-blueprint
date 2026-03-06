@@ -548,12 +548,13 @@ Verify that the Data Product Hub returns a composite result (`Transaction + Posi
 2. Publish the Position event for `T1` at `10:00:12`.
 3. Publish the Contract event for `T1` at `10:00:15`.
 4. Set watermarks:
-   - Transaction watermark = `10:00:15`
+   - Transaction watermark = `10:00:10`
    - Position watermark = `10:00:12`
    - Contract watermark = `10:00:12`
 5. Query Data Product Hub for `T1` in `CONSISTENT_WATERMARK` mode.
 6. Query Data Product Hub for `T1` in `BEST_EFFORT` mode.
 7. Advance watermarks:
+   - Transaction watermark = `10:00:15`
    - Position watermark = `10:00:15`
    - Contract watermark = `10:00:15`
 8. Query Data Product Hub again for `T1` in `CONSISTENT_WATERMARK` mode.
@@ -571,3 +572,270 @@ Verify that the Data Product Hub returns a composite result (`Transaction + Posi
 - Strict read is blocked before watermark catch-up.
 - Strict read succeeds immediately after watermark catch-up.
 - No false positive consistency before all dependency streams are complete.
+
+---
+
+## 16) PostgreSQL + Spring Sample Snippets
+
+### 16.1 SQL Schema
+
+```sql
+create table stream_watermark (
+  stream_name text primary key,
+  watermark_ts timestamptz not null
+);
+
+create table composite_trade_view (
+  trade_key text not null,
+  correlation_id text not null,
+
+  transaction_event_ts timestamptz,
+  position_event_ts timestamptz,
+  contract_event_ts timestamptz,
+
+  transaction_data jsonb,
+  position_data jsonb,
+  contract_data jsonb,
+
+  watermark_consistent boolean not null default false,
+  last_composite_watermark timestamptz,
+
+  primary key (trade_key, correlation_id)
+);
+
+create index idx_trade_consistent on composite_trade_view (trade_key, watermark_consistent);
+```
+
+### 16.2 Entity Model (Simplified)
+
+```java
+import jakarta.persistence.*;
+import java.io.Serializable;
+import java.time.Instant;
+import java.util.Objects;
+
+@Embeddable
+public class CompositeTradeKey implements Serializable {
+    @Column(name = "trade_key")
+    private String tradeKey;
+
+    @Column(name = "correlation_id")
+    private String correlationId;
+
+    public CompositeTradeKey() {}
+    public CompositeTradeKey(String tradeKey, String correlationId) {
+        this.tradeKey = tradeKey;
+        this.correlationId = correlationId;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof CompositeTradeKey that)) return false;
+        return Objects.equals(tradeKey, that.tradeKey)
+            && Objects.equals(correlationId, that.correlationId);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(tradeKey, correlationId);
+    }
+}
+
+@Entity
+@Table(name = "composite_trade_view")
+public class CompositeTradeEntity {
+    @EmbeddedId
+    private CompositeTradeKey id;
+
+    @Column(name = "transaction_event_ts")
+    private Instant transactionEventTs;
+
+    @Column(name = "position_event_ts")
+    private Instant positionEventTs;
+
+    @Column(name = "contract_event_ts")
+    private Instant contractEventTs;
+
+    @Column(name = "transaction_data", columnDefinition = "jsonb")
+    private String transactionData;
+
+    @Column(name = "position_data", columnDefinition = "jsonb")
+    private String positionData;
+
+    @Column(name = "contract_data", columnDefinition = "jsonb")
+    private String contractData;
+
+    @Column(name = "watermark_consistent")
+    private boolean watermarkConsistent;
+
+    @Column(name = "last_composite_watermark")
+    private Instant lastCompositeWatermark;
+}
+```
+
+### 16.3 Repository Queries
+
+```java
+import org.springframework.data.jpa.repository.*;
+import org.springframework.data.repository.query.Param;
+import java.util.Optional;
+
+public interface CompositeTradeRepository extends JpaRepository<CompositeTradeEntity, CompositeTradeKey> {
+
+    @Query(value = """
+        select * from composite_trade_view c
+        where c.trade_key = :tradeKey
+          and c.watermark_consistent = true
+        order by c.correlation_id desc
+        limit 1
+        """, nativeQuery = true)
+    Optional<CompositeTradeEntity> findStrictByTradeKey(@Param("tradeKey") String tradeKey);
+
+    @Query(value = """
+        select * from composite_trade_view c
+        where c.trade_key = :tradeKey
+        order by c.correlation_id desc
+        limit 1
+        """, nativeQuery = true)
+    Optional<CompositeTradeEntity> findBestEffortByTradeKey(@Param("tradeKey") String tradeKey);
+}
+```
+
+### 16.4 Watermark Service
+
+```java
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import java.time.Instant;
+
+@Service
+public class WatermarkService {
+    private final JdbcTemplate jdbc;
+
+    public WatermarkService(JdbcTemplate jdbc) {
+        this.jdbc = jdbc;
+    }
+
+    public Instant compositeTradeWatermark() {
+        return jdbc.queryForObject("""
+            select min(watermark_ts)
+            from stream_watermark
+            where stream_name in ('transaction','position','contract')
+            """, Instant.class);
+    }
+
+    @Transactional
+    public void markConsistentRows() {
+        Instant wm = compositeTradeWatermark();
+        if (wm == null) return;
+
+        jdbc.update("""
+            update composite_trade_view
+               set watermark_consistent = true,
+                   last_composite_watermark = ?
+             where watermark_consistent = false
+               and transaction_event_ts is not null
+               and position_event_ts is not null
+               and contract_event_ts is not null
+               and greatest(transaction_event_ts, position_event_ts, contract_event_ts) <= ?
+            """, wm, wm);
+    }
+}
+```
+
+### 16.5 Ingestion Service
+
+```java
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import java.time.Instant;
+
+@Service
+public class IngestionService {
+    private final JdbcTemplate jdbc;
+    private final WatermarkService watermarkService;
+
+    public IngestionService(JdbcTemplate jdbc, WatermarkService watermarkService) {
+        this.jdbc = jdbc;
+        this.watermarkService = watermarkService;
+    }
+
+    @Transactional
+    public void onDomainEvent(String stream, String tradeKey, String correlationId, Instant eventTs, String payloadJson) {
+        jdbc.update("""
+            insert into composite_trade_view (trade_key, correlation_id)
+            values (?, ?)
+            on conflict do nothing
+            """, tradeKey, correlationId);
+
+        switch (stream) {
+            case "transaction" -> jdbc.update("""
+                update composite_trade_view
+                   set transaction_event_ts = ?, transaction_data = ?::jsonb
+                 where trade_key = ? and correlation_id = ?
+                """, eventTs, payloadJson, tradeKey, correlationId);
+            case "position" -> jdbc.update("""
+                update composite_trade_view
+                   set position_event_ts = ?, position_data = ?::jsonb
+                 where trade_key = ? and correlation_id = ?
+                """, eventTs, payloadJson, tradeKey, correlationId);
+            case "contract" -> jdbc.update("""
+                update composite_trade_view
+                   set contract_event_ts = ?, contract_data = ?::jsonb
+                 where trade_key = ? and correlation_id = ?
+                """, eventTs, payloadJson, tradeKey, correlationId);
+            default -> throw new IllegalArgumentException("Unknown stream: " + stream);
+        }
+
+        watermarkService.markConsistentRows();
+    }
+
+    @Transactional
+    public void onWatermarkEvent(String stream, Instant watermarkTs) {
+        jdbc.update("""
+            insert into stream_watermark(stream_name, watermark_ts)
+            values (?, ?)
+            on conflict (stream_name)
+            do update set watermark_ts = greatest(stream_watermark.watermark_ts, excluded.watermark_ts)
+            """, stream, watermarkTs);
+
+        watermarkService.markConsistentRows();
+    }
+}
+```
+
+### 16.6 Query API
+
+```java
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+import java.util.Map;
+
+@RestController
+@RequestMapping("/v1/composites")
+public class CompositeController {
+    private final CompositeTradeRepository repo;
+
+    public CompositeController(CompositeTradeRepository repo) {
+        this.repo = repo;
+    }
+
+    @GetMapping("/{tradeKey}")
+    public ResponseEntity<?> get(
+        @PathVariable String tradeKey,
+        @RequestParam(defaultValue = "BEST_EFFORT") String mode
+    ) {
+        return switch (mode) {
+            case "CONSISTENT_WATERMARK" -> repo.findStrictByTradeKey(tradeKey)
+                .<ResponseEntity<?>>map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.accepted().body(Map.of("status", "PENDING")));
+            default -> repo.findBestEffortByTradeKey(tradeKey)
+                .<ResponseEntity<?>>map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
+        };
+    }
+}
+```
