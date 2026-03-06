@@ -514,3 +514,60 @@ public class CompositeQueryController {
 2. Data Product Hub watermark tracker module
 3. Composite query API with consistency modes
 4. Runbook for watermark lag and late-event operations
+
+---
+
+## 15) Plain-English End-to-End Test Case
+
+**Test name:** Composite becomes readable only after all dependencies are complete
+
+### Objective
+
+Verify that the Data Product Hub returns a composite result (`Transaction + Position + Contract`) only when dependency-aware watermark confirms all required streams are complete up to the same logical time.
+
+### Preconditions
+
+- Trade composite dependency set is configured as: `Transaction`, `Position`, `Contract`
+- Data Product Hub supports:
+  - `BEST_EFFORT` read mode
+  - `CONSISTENT_WATERMARK` read mode
+- Watermarks are tracked per stream and combined using `MIN(...)`
+
+### Test Data
+
+- Trade key: `T1`
+- Correlation ID: `C1`
+- Event times:
+  - Transaction event at `10:00:10`
+  - Position event at `10:00:12`
+  - Contract event at `10:00:15`
+
+### Steps
+
+1. Publish the Transaction event for `T1` at `10:00:10`.
+2. Publish the Position event for `T1` at `10:00:12`.
+3. Publish the Contract event for `T1` at `10:00:15`.
+4. Set watermarks:
+   - Transaction watermark = `10:00:15`
+   - Position watermark = `10:00:12`
+   - Contract watermark = `10:00:12`
+5. Query Data Product Hub for `T1` in `CONSISTENT_WATERMARK` mode.
+6. Query Data Product Hub for `T1` in `BEST_EFFORT` mode.
+7. Advance watermarks:
+   - Position watermark = `10:00:15`
+   - Contract watermark = `10:00:15`
+8. Query Data Product Hub again for `T1` in `CONSISTENT_WATERMARK` mode.
+
+### Expected Results
+
+- After step 4, composite watermark is `MIN(10:00:15, 10:00:12, 10:00:12) = 10:00:12`.
+- Since Contract event time is `10:00:15`, `CONSISTENT_WATERMARK` should not return the final composite yet (status `PENDING` or empty strict result).
+- `BEST_EFFORT` should return partial/latest available data with metadata indicating not fully consistent.
+- After step 7, composite watermark becomes `10:00:15`.
+- `CONSISTENT_WATERMARK` should now return full composite (`Transaction + Position + Contract`) and mark it as consistent.
+
+### Pass Criteria
+
+- Strict read is blocked before watermark catch-up.
+- Strict read succeeds immediately after watermark catch-up.
+- No false positive consistency before all dependency streams are complete.
