@@ -66,6 +66,59 @@ flowchart LR
     prodDeploy --> jiraReleased[JiraStatus AcceptedForRelease]
 ```
 
+## 4.1 Sequence Diagram (Required Components and Interactions)
+
+```mermaid
+sequenceDiagram
+    participant Dev as Developer
+    participant Jira as JiraCloud
+    participant GL as GitLabRepoMR
+    participant CI as GitLabPipelines
+    participant WH as GitLabWebhook
+    participant JA as JiraAutomation
+    participant QA as QAEnvironment
+    participant STG as StageEnvironment
+    participant PROD as ProdEnvironment
+    participant REL as ReleaseManager
+
+    Dev->>Jira: Start Jira issue ESWAP-1423
+    Dev->>GL: Create feature branch feature/ESWAP-1423-...
+    Dev->>GL: Push commits with Jira key
+    Dev->>GL: Open MR to release/2026.04
+
+    GL->>WH: Emit merge_request event (opened)
+    WH->>JA: Send webhook payload
+    JA->>Jira: Transition issue to InReview
+
+    GL->>CI: Trigger MR pipeline
+    CI->>CI: validate + build + test + security + jira_state_check
+    CI-->>GL: MR pipeline status pass/fail
+
+    alt pipeline passed and approvals complete
+        GL->>GL: Merge MR into release/2026.04
+        GL->>WH: Emit merge_request event (merged)
+        WH->>JA: Send webhook payload
+        JA->>Jira: Transition issue to DevelopmentCompleted
+
+        GL->>CI: Trigger release branch pipeline
+        CI->>QA: Deploy to QA
+        QA-->>CI: QA smoke/regression results
+        QA->>Jira: QA sign-off on Application Release
+        Jira->>Jira: Change approval and AcceptedForRelease
+
+        REL->>GL: Create release tag v2026.04.0
+        GL->>CI: Trigger tag pipeline
+        REL->>CI: Approve manual stage deployment
+        CI->>STG: Deploy to stage
+        REL->>CI: Approve manual prod deployment
+        CI->>PROD: Deploy to production
+        CI->>Jira: Add release/deploy comment (optional automation)
+    else pipeline failed or approval missing
+        CI-->>Dev: Report failures
+        Dev->>GL: Push fixes and rerun pipeline
+    end
+```
+
 ---
 
 ## 5) Jira Cloud Automation with JSON-Style Payloads
