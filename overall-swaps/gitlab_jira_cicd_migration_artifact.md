@@ -68,6 +68,11 @@ flowchart LR
 
 ## 4.1 Sequence Diagram (Required Components and Interactions)
 
+**Branch Flow Legend**
+- Dev flow: `feature/* -> release/*`
+- Release flow: `release/* -> main -> tag (vX.Y.Z)`
+- Hotfix flow: `hotfix/* -> main -> release/*`
+
 ```mermaid
 sequenceDiagram
     participant Dev as Developer
@@ -82,9 +87,9 @@ sequenceDiagram
     participant REL as ReleaseManager
 
     Dev->>Jira: Start Jira issue ESWAP-1423
-    Dev->>GL: Create feature branch feature/ESWAP-1423-...
-    Dev->>GL: Push commits with Jira key
-    Dev->>GL: Open MR to release/2026.04
+    Dev->>GL: Create branch feature/ESWAP-1423-cashflow-fx-fix from release/2026.04
+    Dev->>GL: Push commits to feature/ESWAP-1423-cashflow-fx-fix
+    Dev->>GL: Open MR feature/ESWAP-1423-cashflow-fx-fix -> release/2026.04
 
     GL->>WH: Emit merge_request event (opened)
     WH->>JA: Send webhook payload
@@ -95,7 +100,7 @@ sequenceDiagram
     CI-->>GL: MR pipeline status pass/fail
 
     alt pipeline passed and approvals complete
-        GL->>GL: Merge MR into release/2026.04
+        GL->>GL: Merge MR into release/2026.04 (target branch)
         GL->>WH: Emit merge_request event (merged)
         WH->>JA: Send webhook payload
         JA->>Jira: Transition issue to DevelopmentCompleted
@@ -106,7 +111,8 @@ sequenceDiagram
         QA->>Jira: QA sign-off on Application Release
         Jira->>Jira: Change approval and AcceptedForRelease
 
-        REL->>GL: Create release tag v2026.04.0
+        REL->>GL: Merge release/2026.04 -> main
+        REL->>GL: Create release tag v2026.04.0 on main
         GL->>CI: Trigger tag pipeline
         REL->>CI: Approve manual stage deployment
         CI->>STG: Deploy to stage
@@ -457,4 +463,133 @@ In GitLab project settings:
 - [ ] Webhook rule for MR opened and merged transitions
 - [ ] Release branch deployment to QA
 - [ ] Manual production deploy from signed/tagged release
+
+---
+
+## 11) Dependency Upgrade Governance (Pinned vs Rolling)
+
+When a shared core component releases a new version, not every downstream service should behave the same way.  
+Use two policy lanes to balance stability and velocity.
+
+### 11.1 Policy Lanes
+
+- **Pinned lane (stability-first)**  
+  - Service stays on explicit version (example: `1.8.3`).
+  - No auto-upgrade merge.
+  - Upgrade only by explicit MR and approval.
+
+- **Rolling lane (velocity-first)**  
+  - Service tracks an allowed range/channel (example: `1.8.x`).
+  - Bot/automation can open update MR when core publishes new compatible version.
+  - Merge only if test + policy gates pass.
+
+### 11.2 Core Component Release Rules
+
+- Follow semantic versioning (`MAJOR.MINOR.PATCH`).
+- Publish release notes with:
+  - breaking changes
+  - migration guidance
+  - compatibility matrix
+- Trigger downstream dependency governance pipeline after publish.
+
+### 11.3 Central Policy Manifest
+
+Maintain a central policy manifest (in platform-infra repo or shared governance repo):
+
+```yaml
+coreDependencyPolicies:
+  coreArtifact: "com.company:core-component"
+  services:
+    trade-capture-service:
+      lane: pinned
+      allowedVersion: "1.8.3"
+      autoMr: false
+    valuation-service:
+      lane: rolling
+      allowedRange: "1.8.x"
+      autoMr: true
+    cashflow-service:
+      lane: pinned
+      allowedVersion: "1.8.2"
+      autoMr: false
+    contract-service:
+      lane: rolling
+      allowedRange: "1.8.x"
+      autoMr: true
+```
+
+### 11.4 GitLab CI Enforcement Pattern
+
+Add a dependency governance job in each service pipeline:
+
+```yaml
+dependency_policy_check:
+  stage: policy
+  image: alpine:3.20
+  script:
+    - echo "Read service lane from policy manifest"
+    - echo "Extract current core-component version from pom.xml/build file"
+    - echo "Validate pinned services stay at allowedVersion"
+    - echo "Validate rolling services stay within allowedRange"
+    - echo "Fail if policy violated"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+```
+
+For rolling services, add a scheduled automation job (or central orchestrator) that:
+- Detects new compatible core release.
+- Opens MR with dependency bump.
+- Tags owning team and links Jira ticket.
+
+### 11.5 Recommended Guardrails
+
+- Block direct dependency bumps to protected branches without MR.
+- Require contract/integration tests on dependency bump MRs.
+- Require explicit approval from owning team for pinned-lane upgrades.
+- Track dependency drift dashboard:
+  - latest available core version
+  - adopted version by service
+  - days behind
+
+### 11.6 Practical Outcome
+
+This model supports both requirements:
+- Some services always move to latest compatible core release (rolling lane).
+- Other services stay on existing core version until explicitly approved (pinned lane).
+
+### 11.7 Dependency Governance Sequence Diagram
+
+```mermaid
+sequenceDiagram
+    participant Core as CoreComponentRepo
+    participant Registry as ArtifactRegistry
+    participant Gov as GovernanceOrchestrator
+    participant Policy as PolicyManifestRepo
+    participant Rolling as RollingServiceRepo
+    participant Pinned as PinnedServiceRepo
+    participant Jira as JiraCloud
+    participant Team as ServiceOwnerTeam
+
+    Core->>Registry: Publish new core version 1.8.4
+    Registry->>Gov: Release event core 1.8.4
+    Gov->>Policy: Load lane rules pinned vs rolling
+
+    Gov->>Rolling: Check allowedRange (1.8.x)
+    alt compatible with rolling policy
+        Gov->>Rolling: Open auto MR bump to 1.8.4
+        Gov->>Jira: Create/update upgrade issue for traceability
+        Rolling->>Rolling: Run MR pipeline + tests + policy checks
+        Team->>Rolling: Review and approve MR
+        Rolling->>Rolling: Merge and deploy per pipeline rules
+    else not compatible
+        Gov->>Jira: Raise blocker issue for rolling service
+    end
+
+    Gov->>Pinned: Check allowedVersion (1.8.3 fixed)
+    Gov->>Jira: Create advisory issue new core 1.8.4 available
+    Note over Pinned: No auto version bump for pinned lane
+    Team->>Pinned: Create manual upgrade MR when ready
+    Pinned->>Pinned: Run full regression and approval gates
+    Team->>Pinned: Merge after sign-off
+```
 
