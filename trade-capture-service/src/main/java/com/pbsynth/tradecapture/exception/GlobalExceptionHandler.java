@@ -2,6 +2,8 @@ package com.pbsynth.tradecapture.exception;
 
 import com.pbsynth.tradecapture.dto.ErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.ConstraintViolationException;
+import org.slf4j.MDC;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
@@ -23,7 +25,21 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest().body(new ErrorResponse(
                 "VALIDATION_ERROR",
                 "Validation failed",
-                request.getHeader("X-Correlation-Id"),
+                correlationId(request),
+                Instant.now(),
+                details
+        ));
+    }
+
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<ErrorResponse> handleConstraint(ConstraintViolationException ex, HttpServletRequest request) {
+        List<String> details = ex.getConstraintViolations().stream()
+                .map(v -> v.getPropertyPath() + ": " + v.getMessage())
+                .toList();
+        return ResponseEntity.badRequest().body(new ErrorResponse(
+                "VALIDATION_ERROR",
+                "Validation failed",
+                correlationId(request),
                 Instant.now(),
                 details
         ));
@@ -31,15 +47,10 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(ApiException.class)
     public ResponseEntity<ErrorResponse> handleApi(ApiException ex, HttpServletRequest request) {
-        HttpStatus status = switch (ex.getCode()) {
-            case "DUPLICATE_IDEMPOTENCY_KEY" -> HttpStatus.CONFLICT;
-            case "INGESTION_NOT_FOUND" -> HttpStatus.NOT_FOUND;
-            default -> HttpStatus.BAD_REQUEST;
-        };
-        return ResponseEntity.status(status).body(new ErrorResponse(
+        return ResponseEntity.status(ex.getStatus()).body(new ErrorResponse(
                 ex.getCode(),
                 ex.getMessage(),
-                request.getHeader("X-Correlation-Id"),
+                correlationId(request),
                 Instant.now(),
                 List.of()
         ));
@@ -50,9 +61,17 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new ErrorResponse(
                 "INTERNAL_ERROR",
                 "Unexpected server error",
-                request.getHeader("X-Correlation-Id"),
+                correlationId(request),
                 Instant.now(),
                 List.of(ex.getClass().getSimpleName())
         ));
+    }
+
+    private String correlationId(HttpServletRequest request) {
+        String mdcValue = MDC.get("correlationId");
+        if (mdcValue != null && !mdcValue.isBlank()) {
+            return mdcValue;
+        }
+        return request.getHeader("X-Correlation-Id");
     }
 }

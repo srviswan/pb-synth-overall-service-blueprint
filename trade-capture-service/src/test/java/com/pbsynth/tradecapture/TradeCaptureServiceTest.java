@@ -3,7 +3,7 @@ package com.pbsynth.tradecapture;
 import com.pbsynth.tradecapture.dto.CaptureTradeRequest;
 import com.pbsynth.tradecapture.exception.ApiException;
 import com.pbsynth.tradecapture.repo.IngestionRecordRepository;
-import com.pbsynth.tradecapture.service.TradeCaptureService;
+import com.pbsynth.tradecapture.service.TradeIngestionService;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -12,11 +12,11 @@ import org.springframework.boot.test.context.SpringBootTest;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
-@SpringBootTest
+@SpringBootTest(properties = "tradecapture.dispatch.worker-enabled=false")
 class TradeCaptureServiceTest {
 
     @Autowired
-    private TradeCaptureService service;
+    private TradeIngestionService service;
 
     @Autowired
     private IngestionRecordRepository repository;

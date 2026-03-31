@@ -1,0 +1,39 @@
+rules:
+  - id: ECON_DAY_COUNT_USD
+    name: USD day count rule
+    type: ECONOMIC
+    priority: 10
+    enabled: true
+    criteria:
+      - field: sourceSystem
+        operator: EQ
+        value: AMS
+    actions:
+      - target: DAY_COUNT
+        action: SET
+        value: ACT/360
+
+  - id: WORKFLOW_MANUAL_REVIEW
+    name: Manual source requires approval
+    type: WORKFLOW
+    priority: 20
+    enabled: true
+    criteria:
+      - field: sourceSystem
+        operator: EQ
+        value: MANUAL
+    actions:
+      - target: WORKFLOW_STATUS
+        action: SET
+        value: PENDING_APPROVAL
+
+  - id: WORKFLOW_DEFAULT_APPROVED
+    name: Default auto approval
+    type: WORKFLOW
+    priority: 999
+    enabled: true
+    criteria: []
+    actions:
+      - target: WORKFLOW_STATUS
+        action: SET
+        value: APPROVED

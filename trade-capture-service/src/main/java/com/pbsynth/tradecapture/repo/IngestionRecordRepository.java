@@ -9,5 +9,6 @@ import java.util.Optional;
 
 public interface IngestionRecordRepository extends JpaRepository<IngestionRecord, String> {
     Optional<IngestionRecord> findByIdempotencyKey(String idempotencyKey);
-    List<IngestionRecord> findTop100ByStatusOrderByCreatedAtAsc(IngestionStatus status);
+
+    List<IngestionRecord> findByStatus(IngestionStatus status);
 }
