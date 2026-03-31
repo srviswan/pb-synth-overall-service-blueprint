@@ -680,3 +680,41 @@ project = ESWAP AND fixVersion = "2026.04" AND status not in ("QA Passed","Accep
 - Cleaner dev velocity and sprint burn-down reporting.
 - QA still has full traceability through Jira states, release issues, and GitLab deployment evidence.
 
+### 12.8 Sequence Diagram (Dev Sprint N, QA Sprint N+1)
+
+```mermaid
+sequenceDiagram
+    participant Dev as Developer
+    participant Jira as JiraCloudIssue
+    participant GL as GitLabRepoMR
+    participant CI as GitLabPipelines
+    participant Rel as ReleaseBranch
+    participant QA as QATeam
+    participant AppRel as ApplicationReleaseIssue
+
+    Note over Dev,Jira: Sprint N (Development)
+    Dev->>Jira: Pick story ESWAP-1423 and move to InProgress
+    Dev->>GL: Push commits to feature/ESWAP-1423-...
+    Dev->>GL: Open MR feature/... -> release/2026.04
+    GL->>Jira: Automation transition to InReview
+    GL->>CI: Run MR pipeline (validate/build/test/security)
+    CI-->>GL: Pipeline passed
+    GL->>Rel: Merge MR into release/2026.04
+    GL->>Jira: Transition to DevelopmentCompleted
+    Jira->>Jira: Set QASprint = next active sprint
+    Jira->>Jira: Move to ReadyForQA
+
+    Note over QA,AppRel: Sprint N+1 (QA)
+    Rel->>CI: Trigger release branch pipeline
+    CI->>QA: Deploy artifact to QA environment
+    QA->>Jira: Move issue to QAInProgress
+    QA->>Jira: Execute test cases and evidence updates
+    alt QA passed
+        QA->>Jira: Transition issue to QAPassed
+        QA->>AppRel: Mark QA sign-off on Application Release
+    else QA failed
+        QA->>Jira: Reopen defect/new bug linked to story
+        Dev->>GL: Deliver fix via new feature MR to release branch
+    end
+```
+
