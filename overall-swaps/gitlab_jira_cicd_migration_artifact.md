@@ -8,6 +8,15 @@ This artifact provides an implementation-ready migration blueprint from TeamCity
 - Application Release issue type and QA sign-off
 - Change approval before production release
 
+### 1.1 Hands-on sandbox project (GitLab)
+
+Use this small GitLab project to run a **real** pipeline, MR, and branch flow without touching production repos:
+
+- **Clone (HTTPS)**: `https://gitlab.com/viswansr/cursor-test-gitlab.git`
+- **Project page**: [gitlab.com/viswansr/cursor-test-gitlab](https://gitlab.com/viswansr/cursor-test-gitlab)
+
+Typical first steps: clone the repo, add or edit `.gitlab-ci.yml`, push to `main` or open an MR and watch **Build → Pipelines** in that project.
+
 ---
 
 ## 2) Target Operating Model
@@ -592,4 +601,82 @@ sequenceDiagram
     Pinned->>Pinned: Run full regression and approval gates
     Team->>Pinned: Merge after sign-off
 ```
+
+---
+
+## 12) One-Sprint-Behind QA Operating Model
+
+If QA runs one sprint behind development, do not keep dev stories open until QA finishes.  
+Instead, separate **dev completion tracking** from **QA validation tracking**.
+
+### 12.1 Recommended Workflow States
+
+- `In Progress` (developer coding)
+- `In Review` (MR open/review)
+- `Development Completed` (MR merged to release or integration branch)
+- `Ready for QA` (queued for QA sprint)
+- `QA In Progress`
+- `QA Passed` (or `Accepted for Release` if your workflow combines these)
+
+### 12.2 Sprint Handling Rule
+
+- Dev story is completed in sprint **N** when it reaches `Development Completed`.
+- QA execution occurs in sprint **N+1** without carrying dev story into dev sprint metrics.
+- QA progress is tracked through release issue, linked QA task, or QA board filter.
+
+### 12.3 Jira Field Model (Minimal)
+
+Add these fields:
+
+- `Dev Sprint` (existing sprint assignment)
+- `QA Sprint` (custom field, next sprint value)
+- `QA Status` (optional if represented directly by workflow state)
+
+### 12.4 Automation Rules (Jira Cloud)
+
+1. **MR Merged -> Development Completed**
+   - Trigger: incoming webhook from GitLab MR merged event
+   - Action:
+     - transition issue to `Development Completed`
+     - set `QA Sprint` to next active sprint
+     - set status to `Ready for QA` if you use separate QA queue state
+
+2. **QA Starts -> QA In Progress**
+   - Trigger: issue moved into QA board column
+   - Action: transition to `QA In Progress`
+
+3. **QA Passes -> QA Passed**
+   - Trigger: QA sign-off action
+   - Action:
+     - transition to `QA Passed`
+     - add comment with test evidence / environment / release branch
+
+### 12.5 CI/CD Mapping
+
+- Feature/MR pipelines support sprint **N** development.
+- Release branch (`release/*`) deploys to QA environment for sprint **N+1** validation.
+- Promotion to stage/prod is gated by QA sign-off and change approval, not by dev sprint completion.
+
+### 12.6 Jira Views and JQL (Examples)
+
+**Dev board completion filter** (for velocity):
+```text
+project = ESWAP AND sprint = currentSprint() AND status in ("Development Completed","Done")
+```
+
+**QA backlog filter** (next sprint testing queue):
+```text
+project = ESWAP AND status in ("Ready for QA","QA In Progress") ORDER BY priority DESC, updated DESC
+```
+
+**Release readiness filter**:
+```text
+project = ESWAP AND fixVersion = "2026.04" AND status not in ("QA Passed","Accepted for Release","Done")
+```
+
+### 12.7 Why This Works
+
+- No artificial carry-over of development stories into next sprint.
+- Cleaner dev velocity and sprint burn-down reporting.
+- QA still has full traceability through Jira states, release issues, and GitLab deployment evidence.
 
